@@ -102,6 +102,20 @@ init_logging() {
     log_message "========== NFS Mount Manager Started =========="
 }
 
+# Check if passwordless sudo is configured for NFS mounts
+check_passwordless_sudo() {
+    # Test if we can run mount with sudo without password
+    if ! sudo -n mount > /dev/null 2>&1; then
+        # Informational warning only - don't block execution
+        if [[ "$SILENT_MODE" == false ]]; then
+            print_warning "Passwordless sudo is not configured"
+            print_info "For reliable automation, run: ${BOLD}setup-sudo.sh${NC}"
+            echo ""
+        fi
+        log_message "WARNING: Passwordless sudo not configured (recommended for automation)"
+    fi
+}
+
 # Check if yq is installed
 check_dependencies() {
     local yq_cmd=""
@@ -636,42 +650,40 @@ show_usage() {
         load_settings 2>/dev/null || true
     fi
     
-    cat << EOF
-${BOLD}NFS Mount Manager for macOS${NC}
-
-${BOLD}USAGE:${NC}
-    $0 [OPTIONS]
-
-${BOLD}OPTIONS:${NC}
-    (no options)           Mount all NFS shares from config
-    --setup-automount      Add entries to /etc/fstab for auto-mount on boot
-    --remove-automount     Remove auto-mount entries from /etc/fstab
-    --silent               Run in silent mode (no output, logs only)
-    --help                 Show this help message
-
-${BOLD}CONFIGURATION:${NC}
-    Config file: ${CYAN}${CONFIG_FILE}${NC}
-    Mount base:  ${CYAN}${BASE_MOUNT_DIR:-\${HOME}/External}${NC}
-    Log file:    ${CYAN}${LOG_FILE}${NC}
-
-${BOLD}EXAMPLES:${NC}
-    Mount all shares:
-        $0
-
-    Mount silently (for automation/Keyboard Maestro):
-        $0 --silent
-
-    Setup auto-mount on boot:
-        $0 --setup-automount
-
-    Remove auto-mount configuration:
-        $0 --remove-automount
-
-${BOLD}KEYBOARD MAESTRO:${NC}
-    For use with Keyboard Maestro, use the --silent flag:
-        /bin/bash $0 --silent
-
-EOF
+    echo -e "${BOLD}NFS Mount Manager for macOS${NC}"
+    echo ""
+    echo -e "${BOLD}USAGE:${NC}"
+    echo "    $0 [OPTIONS]"
+    echo ""
+    echo -e "${BOLD}OPTIONS:${NC}"
+    echo "    (no options)           Mount all NFS shares from config"
+    echo "    --setup-automount      Add entries to /etc/fstab for auto-mount on boot"
+    echo "    --remove-automount     Remove auto-mount entries from /etc/fstab"
+    echo "    --silent               Run in silent mode (no output, logs only)"
+    echo "    --help                 Show this help message"
+    echo ""
+    echo -e "${BOLD}CONFIGURATION:${NC}"
+    echo -e "    Config file: ${CYAN}${CONFIG_FILE}${NC}"
+    echo -e "    Mount base:  ${CYAN}${BASE_MOUNT_DIR:-${HOME}/External}${NC}"
+    echo -e "    Log file:    ${CYAN}${LOG_FILE}${NC}"
+    echo ""
+    echo -e "${BOLD}EXAMPLES:${NC}"
+    echo "    Mount all shares:"
+    echo "        $0"
+    echo ""
+    echo "    Mount silently (for automation/Keyboard Maestro):"
+    echo "        $0 --silent"
+    echo ""
+    echo "    Setup auto-mount on boot:"
+    echo "        $0 --setup-automount"
+    echo ""
+    echo "    Remove auto-mount configuration:"
+    echo "        $0 --remove-automount"
+    echo ""
+    echo -e "${BOLD}KEYBOARD MAESTRO:${NC}"
+    echo "    For use with Keyboard Maestro, use the --silent flag:"
+    echo "        /bin/bash $0 --silent"
+    echo ""
 }
 
 # Main function
@@ -695,6 +707,7 @@ main() {
     case "${1:-}" in
         --setup-automount)
             check_dependencies
+            check_passwordless_sudo
             initialize_config
             validate_config
             create_base_dir
@@ -702,6 +715,7 @@ main() {
             ;;
         --remove-automount)
             check_dependencies
+            check_passwordless_sudo
             initialize_config
             validate_config
             remove_automount
@@ -712,6 +726,7 @@ main() {
             ;;
         --silent)
             check_dependencies
+            check_passwordless_sudo
             initialize_config
             validate_config
             create_base_dir
@@ -723,6 +738,7 @@ main() {
             ;;
         "")
             check_dependencies
+            check_passwordless_sudo
             initialize_config
             validate_config
             create_base_dir
