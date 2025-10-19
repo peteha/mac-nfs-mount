@@ -14,9 +14,24 @@ A robust NFS mount manager for macOS with YAML configuration, automatic validati
 
 ## Installation
 
-1. Clone this repository or download the script:
+### Option 1: Homebrew (Recommended)
+
+```bash
+# Add the tap
+brew tap peteha/tap
+
+# Install
+brew install nfs-mount
+
+# Set up passwordless sudo (required for automation)
+setup-sudo.sh
+```
+
+### Option 2: Manual Installation
+
+1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/mac-nfs-mount.git
+   git clone https://github.com/peteha/mac-nfs-mount.git
    cd mac-nfs-mount
    chmod +x nfs-mount.sh
    ```
@@ -26,6 +41,11 @@ A robust NFS mount manager for macOS with YAML configuration, automatic validati
    brew install yq
    ```
    Or the script will install it automatically on first run.
+
+3. Optionally, add to your PATH:
+   ```bash
+   sudo ln -s "$(pwd)/nfs-mount.sh" /usr/local/bin/nfs-mount
+   ```
 
 ## Configuration
 
@@ -70,28 +90,30 @@ All mounts are created under `~/External/[mount_name]`
 
 ### Mount all NFS shares:
 ```bash
-./nfs-mount.sh
+nfs-mount
 ```
 
 ### Silent mode (for automation):
 ```bash
-./nfs-mount.sh --silent
+nfs-mount --silent
 ```
 
 ### Setup auto-mount on boot:
 ```bash
-./nfs-mount.sh --setup-automount
+nfs-mount --setup-automount
 ```
 
 ### Remove auto-mount configuration:
 ```bash
-./nfs-mount.sh --remove-automount
+nfs-mount --remove-automount
 ```
 
 ### Show help:
 ```bash
-./nfs-mount.sh --help
+nfs-mount --help
 ```
+
+**Note**: If installed manually (not via Homebrew), use `./nfs-mount.sh` instead of `nfs-mount`
 
 ## Keyboard Maestro Integration
 
@@ -100,6 +122,10 @@ To use with Keyboard Maestro:
 1. Create a new macro
 2. Add an "Execute Shell Script" action
 3. Use this command:
+   ```bash
+   nfs-mount --silent
+   ```
+   Or if installed manually:
    ```bash
    /bin/bash /Users/[your-username]/path/to/nfs-mount.sh --silent
    ```
