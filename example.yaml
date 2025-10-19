@@ -1,0 +1,38 @@
+# NFS Mount Configuration Example
+# Copy this to ~/.config/nfs-mount/config.yaml and customize for your setup
+
+# List of NFS mounts
+mounts:
+  # Example mount entry - replace with your actual NFS server details
+  - server: "192.168.1.100"        # IP or hostname of your NFS server
+    share: "/mnt/tank/media"       # Share path on the NFS server
+    nfs_version: "4"               # NFS version: "3" or "4"
+    mount_name: "nas-media"        # Local name for the mount (no spaces)
+    enabled: true                   # Set to false to disable this mount
+
+  # Another example (commented out)
+  # - server: "truenas.local"
+  #   share: "/mnt/pool/backups"
+  #   nfs_version: "4"
+  #   mount_name: "nas-backups"
+  #   enabled: true
+
+  # NFSv3 example (for older servers)
+  # - server: "192.168.1.101"
+  #   share: "/export/files"
+  #   nfs_version: "3"
+  #   mount_name: "old-nas-files"
+  #   enabled: true
+
+# Notes:
+# - server: IP address or hostname of your NFS server
+# - share: The exported path on the NFS server
+# - nfs_version: Use "4" for NFSv4 (recommended) or "3" for NFSv3
+# - mount_name: Used to create the local mount point at ~/External/[mount_name]
+#   * Only use letters, numbers, hyphens, and underscores
+#   * No spaces or special characters
+# - enabled: Set to false to temporarily disable a mount without deleting it
+#
+# All mounts will be created under ~/External/
+# Example: ~/External/nas-media
+
