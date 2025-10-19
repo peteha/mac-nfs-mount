@@ -171,6 +171,22 @@ For TrueNAS servers:
 3. Add your Mac's IP to the authorized networks
 4. Use NFSv4 for better performance and security
 
+## Development
+
+### Build Scripts
+
+For developers and maintainers:
+
+```bash
+# Quick local testing
+./build.sh
+
+# Create new release
+./release.sh 1.0.1
+```
+
+See [BUILD.md](BUILD.md) for detailed build and release instructions.
+
 ## License
 
 See LICENSE file for details.

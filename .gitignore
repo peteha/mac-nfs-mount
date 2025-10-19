@@ -39,3 +39,6 @@ test/
 
 # Homebrew build artifacts
 *.bottle.tar.gz
+
+# Build script artifacts
+*.backup
