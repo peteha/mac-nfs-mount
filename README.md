@@ -39,15 +39,15 @@ A robust NFS mount manager for macOS with YAML configuration, automatic validati
 3. Example configuration:
    ```yaml
    mounts:
-     - server: "192.168.1.100"
+     - server: "192.168.1.100"     # Use IP address (more reliable than hostname)
        share: "/mnt/tank/media"
-       nfs_version: "4"
+       nfs_version: "3"             # Use "3" for TrueNAS compatibility
        mount_name: "nas-media"
        enabled: true
      
-     - server: "truenas.local"
+     - server: "192.168.1.100"
        share: "/mnt/pool/backups"
-       nfs_version: "4"
+       nfs_version: "3"
        mount_name: "nas-backups"
        enabled: true
    ```
@@ -56,9 +56,11 @@ A robust NFS mount manager for macOS with YAML configuration, automatic validati
 
 ### Configuration Fields
 
-- **server**: IP address or hostname of your NFS server
+- **server**: IP address of your NFS server (recommended) or hostname
+  - Example: `"192.168.1.100"` or `"truenas.local"`
+  - **Tip**: IP addresses are more reliable than hostnames
 - **share**: The exported path on the NFS server (e.g., `/mnt/tank/media`)
-- **nfs_version**: NFS protocol version - use `"4"` (recommended) or `"3"`
+- **nfs_version**: NFS protocol version - use `"3"` (recommended for TrueNAS) or `"4"`
 - **mount_name**: Local name for the mount point (letters, numbers, hyphens, underscores only)
 - **enabled**: Set to `false` to temporarily disable a mount
 
@@ -131,8 +133,8 @@ This means you haven't customized the config file yet. Edit `~/.config/nfs-mount
 
 ### Mount options
 The script uses optimized mount options for macOS:
-- **NFSv4**: `vers=4,resvport,rw,bg,hard,intr,noatime,async`
-- **NFSv3**: `vers=3,resvport,rw,bg,hard,intr,noatime,async,tcp,rsize=65536,wsize=65536`
+- **NFSv4**: `resvport,nfsvers=4`
+- **NFSv3**: `resvport,nfsvers=3` (recommended for TrueNAS)
 
 ## TrueNAS Configuration
 

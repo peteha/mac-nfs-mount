@@ -1,33 +1,73 @@
 # NFS Mount Configuration Example
 # Copy this to ~/.config/nfs-mount/config.yaml and customize for your setup
 
+# Global settings (optional - defaults will be used if not specified)
+settings:
+  base_mount_dir: "${HOME}/External"  # Where to create mount points (supports ${HOME})
+  max_retries: 3                      # Number of mount retry attempts
+  retry_delay: 2                      # Seconds to wait between retries
+  
+  # Mount options (applied to all mounts)
+  mount_options:
+    use_resvport: true                # Use reserved port (required by most NFS servers, especially TrueNAS)
+    # Additional options for fine-tuning
+    nfsv3_extra_opts: ""              # Extra options for NFSv3 (e.g., "tcp,rsize=65536,wsize=65536")
+    nfsv4_extra_opts: ""              # Extra options for NFSv4
+    
+  # Common extra options examples:
+  # nfsv3_extra_opts: "tcp,rsize=65536,wsize=65536,soft,intr,timeo=900"
+  # nfsv4_extra_opts: "soft,intr,timeo=900"
+  
+  # For TrueNAS with "mapall nobody:nogroup", you might NOT need resvport:
+  # use_resvport: false
+
 # List of NFS mounts
 mounts:
   # Example mount entry - replace with your actual NFS server details
-  - server: "192.168.1.100"        # IP or hostname of your NFS server
+  - server: "192.168.1.100"        # IP address or hostname of your NFS server
     share: "/mnt/tank/media"       # Share path on the NFS server
-    nfs_version: "4"               # NFS version: "3" or "4"
+    nfs_version: "3"               # NFS version: "3" (recommended for TrueNAS) or "4"
     mount_name: "nas-media"        # Local name for the mount (no spaces)
-    enabled: true                   # Set to false to disable this mount
+    enabled: true                  # Set to false to disable this mount
+    # use_resvport: true           # Optional: override global resvport setting
 
-  # Another example (commented out)
+  # Another example
+  - server: "192.168.1.100"
+    share: "/mnt/tank/backups"
+    nfs_version: "3"
+    mount_name: "nas-backups"
+    enabled: true
+
+  # Using hostname instead of IP
   # - server: "truenas.local"
-  #   share: "/mnt/pool/backups"
-  #   nfs_version: "4"
-  #   mount_name: "nas-backups"
+  #   share: "/mnt/pool/documents"
+  #   nfs_version: "3"
+  #   mount_name: "nas-documents"
   #   enabled: true
 
-  # NFSv3 example (for older servers)
+  # Example: Override resvport for a specific mount
   # - server: "192.168.1.101"
-  #   share: "/export/files"
+  #   share: "/export/public"
   #   nfs_version: "3"
-  #   mount_name: "old-nas-files"
+  #   mount_name: "public-share"
   #   enabled: true
+  #   use_resvport: false           # This mount won't use resvport
+
+  # Disabled mount (will be skipped)
+  # - server: "192.168.1.100"
+  #   share: "/mnt/tank/archive"
+  #   nfs_version: "3"
+  #   mount_name: "nas-archive"
+  #   enabled: false
 
 # Notes:
-# - server: IP address or hostname of your NFS server
+# - server: IP address (recommended) or hostname of your NFS server
+#   * IP addresses are more reliable than hostnames on macOS
+#   * Example: "192.168.1.100" or "truenas.local"
 # - share: The exported path on the NFS server
-# - nfs_version: Use "4" for NFSv4 (recommended) or "3" for NFSv3
+#   * Must match exactly what's exported in TrueNAS
+#   * Case-sensitive!
+# - nfs_version: Use "3" (recommended for TrueNAS) or "4" for NFSv4
 # - mount_name: Used to create the local mount point at ~/External/[mount_name]
 #   * Only use letters, numbers, hyphens, and underscores
 #   * No spaces or special characters
@@ -35,4 +75,10 @@ mounts:
 #
 # All mounts will be created under ~/External/
 # Example: ~/External/nas-media
+#
+# TrueNAS Configuration Required:
+# - Go to Sharing → Unix Shares (NFS)
+# - Enable NFSv3 in Services → NFS settings
+# - Add your Mac's network to authorized networks (e.g., 10.0.0.0/8 or 192.168.1.0/24)
+# - Make sure NFS service is running
 

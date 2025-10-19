@@ -27,8 +27,15 @@ CONFIG_DIR="${HOME}/.config/nfs-mount"
 CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_CONFIG="${SCRIPT_DIR}/example.yaml"
-BASE_MOUNT_DIR="${HOME}/External"
 LOG_FILE="${CONFIG_DIR}/nfs-mount.log"
+
+# These will be loaded from config file (with defaults)
+BASE_MOUNT_DIR=""
+MAX_RETRIES=3
+RETRY_DELAY=2
+USE_RESVPORT=true
+NFSV3_EXTRA_OPTS=""
+NFSV4_EXTRA_OPTS=""
 
 # Silent mode for automation (set via --silent flag)
 SILENT_MODE=false
@@ -182,6 +189,42 @@ EOF
     fi
 }
 
+# Load settings from config file
+load_settings() {
+    # Load base_mount_dir (with default)
+    local config_base_dir=$(yq eval '.settings.base_mount_dir // ""' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$config_base_dir" ]]; then
+        # Expand ${HOME} if present
+        BASE_MOUNT_DIR="${config_base_dir//\$\{HOME\}/${HOME}}"
+    else
+        BASE_MOUNT_DIR="${HOME}/External"
+    fi
+    
+    # Load max_retries (with default)
+    local config_retries=$(yq eval '.settings.max_retries // ""' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$config_retries" ]] && [[ "$config_retries" =~ ^[0-9]+$ ]]; then
+        MAX_RETRIES="$config_retries"
+    fi
+    
+    # Load retry_delay (with default)
+    local config_delay=$(yq eval '.settings.retry_delay // ""' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$config_delay" ]] && [[ "$config_delay" =~ ^[0-9]+$ ]]; then
+        RETRY_DELAY="$config_delay"
+    fi
+    
+    # Load mount options
+    local config_resvport=$(yq eval '.settings.mount_options.use_resvport // ""' "$CONFIG_FILE" 2>/dev/null)
+    if [[ "$config_resvport" == "false" ]]; then
+        USE_RESVPORT=false
+    else
+        USE_RESVPORT=true
+    fi
+    
+    # Load extra mount options
+    NFSV3_EXTRA_OPTS=$(yq eval '.settings.mount_options.nfsv3_extra_opts // ""' "$CONFIG_FILE" 2>/dev/null)
+    NFSV4_EXTRA_OPTS=$(yq eval '.settings.mount_options.nfsv4_extra_opts // ""' "$CONFIG_FILE" 2>/dev/null)
+}
+
 # Validate YAML config file
 validate_config() {
     print_step "Validating configuration..."
@@ -191,6 +234,9 @@ validate_config() {
         print_error "Configuration file is not valid YAML: $CONFIG_FILE"
         exit 1
     fi
+    
+    # Load settings from config
+    load_settings
     
     # Check if mounts array exists
     if ! yq eval '.mounts' "$CONFIG_FILE" > /dev/null 2>&1; then
@@ -303,6 +349,7 @@ mount_nfs_share() {
     local nfs_version="$3"
     local mount_name="$4"
     local enabled="${5:-true}"
+    local mount_use_resvport="${6:-}"  # Per-mount resvport override (optional)
     
     # Skip if disabled
     if [[ "$enabled" != "true" ]]; then
@@ -311,7 +358,7 @@ mount_nfs_share() {
     fi
     
     local mount_point="${BASE_MOUNT_DIR}/${mount_name}"
-    local nfs_url="nfs://${server}${share}"
+    local nfs_url="${server}:${share}"
     
     print_step "Processing: ${BOLD}${mount_name}${NC}"
     
@@ -327,39 +374,80 @@ mount_nfs_share() {
         return 0
     fi
     
-    # Mount options optimized for macOS and TrueNAS
+    # Determine resvport setting (per-mount override or global default)
+    local use_resvport_for_mount="$USE_RESVPORT"
+    if [[ -n "$mount_use_resvport" ]]; then
+        use_resvport_for_mount="$mount_use_resvport"
+    fi
+    
+    # Build mount options from config settings
     local mount_opts=""
     if [[ "$nfs_version" == "4" ]]; then
-        # NFSv4 options for macOS
-        mount_opts="vers=4,resvport,rw,bg,hard,intr,noatime,async"
+        # NFSv4 base options
+        if [[ "$use_resvport_for_mount" == "true" ]]; then
+            mount_opts="resvport,nfsvers=4"
+        else
+            mount_opts="nfsvers=4"
+        fi
+        # Add extra options if specified
+        if [[ -n "$NFSV4_EXTRA_OPTS" ]]; then
+            mount_opts="${mount_opts},${NFSV4_EXTRA_OPTS}"
+        fi
     else
-        # NFSv3 options for macOS
-        mount_opts="vers=3,resvport,rw,bg,hard,intr,noatime,async,tcp,rsize=65536,wsize=65536"
+        # NFSv3 base options
+        if [[ "$use_resvport_for_mount" == "true" ]]; then
+            mount_opts="resvport,nfsvers=3"
+        else
+            mount_opts="nfsvers=3"
+        fi
+        # Add extra options if specified
+        if [[ -n "$NFSV3_EXTRA_OPTS" ]]; then
+            mount_opts="${mount_opts},${NFSV3_EXTRA_OPTS}"
+        fi
     fi
     
     # Attempt to mount with retries for reliability
-    local max_retries=3
     local retry=0
     local mounted=false
+    local mount_error=""
     
-    while [[ $retry -lt $max_retries ]] && [[ "$mounted" == false ]]; do
+    while [[ $retry -lt $MAX_RETRIES ]] && [[ "$mounted" == false ]]; do
         if [[ $retry -gt 0 ]]; then
-            print_info "Retry attempt $retry of $max_retries..."
-            sleep 2
+            print_info "Retry attempt $retry of $MAX_RETRIES..."
+            sleep "$RETRY_DELAY"
         fi
         
-        if mount -t nfs -o "$mount_opts" "$nfs_url" "$mount_point" 2>/dev/null; then
-            mounted=true
-            print_success "Mounted: ${BOLD}${mount_name}${NC} → $mount_point"
+        # Try mount without sudo first (works on macOS for user-owned directories)
+        # If that fails and EUID is not 0, try with sudo
+        mount_error=$(mount -t nfs -o "$mount_opts" "$nfs_url" "$mount_point" 2>&1)
+        local mount_status=$?
+        
+        if [[ $mount_status -ne 0 ]] && [[ $EUID -ne 0 ]]; then
+            # Try with sudo if available and we're not already root
+            mount_error=$(sudo -n mount -t nfs -o "$mount_opts" "$nfs_url" "$mount_point" 2>&1)
+            mount_status=$?
+        fi
+        
+        if [[ $mount_status -eq 0 ]]; then
+            # Verify mount actually succeeded by checking if it shows in mount output
+            if mount | grep -q "on ${mount_point} (nfs"; then
+                mounted=true
+                print_success "Mounted: ${BOLD}${mount_name}${NC} → $mount_point"
+            else
+                ((retry++))
+            fi
         else
             ((retry++))
         fi
     done
     
     if [[ "$mounted" == false ]]; then
-        print_error "Failed to mount after $max_retries attempts: $mount_name"
+        print_error "Failed to mount after $MAX_RETRIES attempts: $mount_name"
         print_info "URL: $nfs_url"
         print_info "Mount point: $mount_point"
+        if [[ -n "$mount_error" ]]; then
+            print_error "Error: $mount_error"
+        fi
         return 1
     fi
     
@@ -386,13 +474,14 @@ mount_all() {
         local nfs_version=$(yq eval ".mounts[$i].nfs_version" "$CONFIG_FILE")
         local mount_name=$(yq eval ".mounts[$i].mount_name" "$CONFIG_FILE")
         local enabled=$(yq eval ".mounts[$i].enabled // true" "$CONFIG_FILE")
+        local mount_use_resvport=$(yq eval ".mounts[$i].use_resvport // \"\"" "$CONFIG_FILE")
         
         if [[ "$enabled" != "true" ]]; then
             ((skipped++))
             continue
         fi
         
-        if mount_nfs_share "$server" "$share" "$nfs_version" "$mount_name" "$enabled"; then
+        if mount_nfs_share "$server" "$share" "$nfs_version" "$mount_name" "$enabled" "$mount_use_resvport"; then
             ((mounted++))
         else
             ((failed++))
@@ -542,6 +631,11 @@ remove_automount() {
 
 # Show usage information
 show_usage() {
+    # Load settings to show current values
+    if [[ -f "$CONFIG_FILE" ]]; then
+        load_settings 2>/dev/null || true
+    fi
+    
     cat << EOF
 ${BOLD}NFS Mount Manager for macOS${NC}
 
@@ -557,7 +651,7 @@ ${BOLD}OPTIONS:${NC}
 
 ${BOLD}CONFIGURATION:${NC}
     Config file: ${CYAN}${CONFIG_FILE}${NC}
-    Mount base:  ${CYAN}${BASE_MOUNT_DIR}${NC}
+    Mount base:  ${CYAN}${BASE_MOUNT_DIR:-\${HOME}/External}${NC}
     Log file:    ${CYAN}${LOG_FILE}${NC}
 
 ${BOLD}EXAMPLES:${NC}
@@ -594,6 +688,8 @@ main() {
     
     if [[ "$SILENT_MODE" == false ]]; then
         print_header "NFS Mount Manager for macOS"
+        print_info "Note: Mounting NFS shares requires sudo privileges"
+        echo ""
     fi
     
     case "${1:-}" in
