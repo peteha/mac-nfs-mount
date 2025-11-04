@@ -520,6 +520,105 @@ mount_all() {
     return 0
 }
 
+# Unmount a single NFS share
+unmount_nfs_share() {
+    local mount_name="$1"
+    local mount_point="${BASE_MOUNT_DIR}/${mount_name}"
+    
+    print_step "Processing: ${BOLD}${mount_name}${NC}"
+    
+    # Check if mount point exists
+    if [[ ! -d "$mount_point" ]]; then
+        print_info "Mount point does not exist: $mount_name"
+        return 0
+    fi
+    
+    # Check if currently mounted
+    if ! mount | grep -q "on ${mount_point} "; then
+        print_info "Not mounted: $mount_name"
+        return 0
+    fi
+    
+    # Attempt to unmount
+    local unmount_error=""
+    local unmount_status=0
+    
+    # Try unmount without sudo first
+    unmount_error=$(umount "$mount_point" 2>&1)
+    unmount_status=$?
+    
+    # If that fails and we're not root, try with sudo
+    if [[ $unmount_status -ne 0 ]] && [[ $EUID -ne 0 ]]; then
+        unmount_error=$(sudo -n umount "$mount_point" 2>&1)
+        unmount_status=$?
+    fi
+    
+    # If still failing, try force unmount
+    if [[ $unmount_status -ne 0 ]] && [[ $EUID -ne 0 ]]; then
+        print_info "Attempting force unmount..."
+        unmount_error=$(sudo -n umount -f "$mount_point" 2>&1)
+        unmount_status=$?
+    fi
+    
+    if [[ $unmount_status -eq 0 ]]; then
+        # Verify unmount actually succeeded
+        if ! mount | grep -q "on ${mount_point} "; then
+            print_success "Unmounted: ${BOLD}${mount_name}${NC} → $mount_point"
+            return 0
+        else
+            print_error "Unmount reported success but mount still exists: $mount_name"
+            return 1
+        fi
+    else
+        print_error "Failed to unmount: $mount_name"
+        print_info "Mount point: $mount_point"
+        if [[ -n "$unmount_error" ]]; then
+            print_error "Error: $unmount_error"
+        fi
+        return 1
+    fi
+}
+
+# Unmount all shares from config
+unmount_all() {
+    print_header "Unmounting All NFS Shares"
+    
+    local count
+    count=$(yq eval '.mounts | length' "$CONFIG_FILE")
+    
+    print_info "Found ${BOLD}${count}${NC} mount(s) in configuration"
+    if [[ "$SILENT_MODE" == false ]]; then
+        echo ""
+    fi
+    
+    local unmounted=0
+    local failed=0
+    
+    for i in $(seq 0 $((count - 1))); do
+        local mount_name=$(yq eval ".mounts[$i].mount_name" "$CONFIG_FILE")
+        
+        if unmount_nfs_share "$mount_name"; then
+            ((unmounted++))
+        else
+            ((failed++))
+        fi
+        
+        if [[ "$SILENT_MODE" == false ]]; then
+            echo ""
+        fi
+    done
+    
+    if [[ "$SILENT_MODE" == false ]]; then
+        echo -e "${BOLD}Summary:${NC}"
+    fi
+    print_success "Successfully processed: ${BOLD}${unmounted}${NC}"
+    if [[ $failed -gt 0 ]]; then
+        print_error "Failed to unmount: ${BOLD}${failed}${NC}"
+        return 1
+    fi
+    return 0
+}
+
 # Add entries to /etc/fstab for auto-mounting on boot
 setup_automount() {
     print_header "Setting Up Auto-Mount on Boot"
@@ -657,6 +756,7 @@ show_usage() {
     echo ""
     echo -e "${BOLD}OPTIONS:${NC}"
     echo "    (no options)           Mount all NFS shares from config"
+    echo "    --unmount-all          Unmount all NFS shares from config"
     echo "    --setup-automount      Add entries to /etc/fstab for auto-mount on boot"
     echo "    --remove-automount     Remove auto-mount entries from /etc/fstab"
     echo "    --silent               Run in silent mode (no output, logs only)"
@@ -679,6 +779,9 @@ show_usage() {
     echo ""
     echo "    Remove auto-mount configuration:"
     echo "        $0 --remove-automount"
+    echo ""
+    echo "    Unmount all shares:"
+    echo "        $0 --unmount-all"
     echo ""
     echo -e "${BOLD}KEYBOARD MAESTRO:${NC}"
     echo "    For use with Keyboard Maestro, use the --silent flag:"
@@ -719,6 +822,20 @@ main() {
             initialize_config
             validate_config
             remove_automount
+            ;;
+        --unmount-all)
+            check_dependencies
+            check_passwordless_sudo
+            initialize_config
+            validate_config
+            if unmount_all; then
+                if [[ "$SILENT_MODE" == false ]]; then
+                    echo -e "\n${BOLD}${GREEN}✓ Done!${NC}\n"
+                fi
+                exit 0
+            else
+                exit 1
+            fi
             ;;
         --help|-h)
             show_usage
