@@ -161,7 +161,9 @@ This means you haven't customized the config file yet. Edit `~/.config/nfs-mount
 The script uses optimized mount options for macOS:
 - **NFSv4**: `resvport,nfsvers=4`
 - **NFSv3**: `resvport,nfsvers=3` (recommended for TrueNAS)
+- **All mounts**: `rw,noappledouble,nobrowse` to prevent AppleDouble files and hide the mounts from Finder
 
+Every run now remounts any already-mounted share so the latest options are applied. You'll see a notice in the output when a share is being remounted.
 ## TrueNAS Configuration
 
 For TrueNAS servers:

@@ -18,7 +18,7 @@ NC='\033[0m'
 
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TAP_DIR="/opt/homebrew/Library/Taps/peteha/homebrew-tap"
+TAP_DIR="/Users/peteha/Data/GitHub/homebrew-tap"
 FORMULA_FILE="${TAP_DIR}/Formula/nfs-mount.rb"
 
 # Print functions

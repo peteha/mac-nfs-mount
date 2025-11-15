@@ -382,10 +382,14 @@ mount_nfs_share() {
         print_info "Created directory: $mount_point"
     fi
     
-    # Check if already mounted
+    # Check if already mounted, and remount to ensure fresh options
     if mount | grep -q "on ${mount_point} "; then
-        print_warning "Already mounted: $mount_name"
-        return 0
+        print_warning "Already mounted: ${mount_name} (will remount to refresh options)"
+        if ! unmount_nfs_share "$mount_name"; then
+            print_error "Unable to unmount existing mount: ${mount_name}"
+            return 1
+        fi
+        print_info "Remounting ${mount_name}..."
     fi
     
     # Determine resvport setting (per-mount override or global default)
@@ -419,6 +423,9 @@ mount_nfs_share() {
             mount_opts="${mount_opts},${NFSV3_EXTRA_OPTS}"
         fi
     fi
+    
+    # macOS-specific options to prevent AppleDouble files and hide mount points
+    mount_opts="${mount_opts},rw,noappledouble,nobrowse"
     
     # Attempt to mount with retries for reliability
     local retry=0

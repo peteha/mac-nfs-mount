@@ -33,28 +33,28 @@
 1. Tag your mac-nfs-mount repository:
    ```bash
    cd /path/to/mac-nfs-mount
-   git tag -a v1.0.0 -m "Release version 1.0.0"
-   git push origin v1.0.0
+   git tag -a v1.1.0 -m "Release version 1.1.0"
+   git push origin v1.1.0
    ```
 
 2. Create a GitHub release at:
    ```
    https://github.com/peteha/mac-nfs-mount/releases/new
    ```
-   - Tag: `v1.0.0`
-   - Title: `v1.0.0 - Initial Release`
+   - Tag: `v1.1.0`
+   - Title: `v1.1.0`
    - Description: Add release notes
 
 3. GitHub will automatically create a tarball at:
    ```
-   https://github.com/peteha/mac-nfs-mount/archive/refs/tags/v1.0.0.tar.gz
+   https://github.com/peteha/mac-nfs-mount/archive/refs/tags/v1.1.0.tar.gz
    ```
 
 4. Update the formula's SHA256:
    ```bash
    # Download and calculate SHA256
-   wget https://github.com/peteha/mac-nfs-mount/archive/refs/tags/v1.0.0.tar.gz
-   shasum -a 256 v1.0.0.tar.gz
+   wget https://github.com/peteha/mac-nfs-mount/archive/refs/tags/v1.1.0.tar.gz
+   shasum -a 256 v1.1.0.tar.gz
    ```
    
    Update `nfs-mount.rb`:
